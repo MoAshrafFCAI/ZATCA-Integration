@@ -172,7 +172,7 @@ export function mapApiToZatcaFormat(apiData) {
     supplier: {
       name: supplierName,
       nameEn: supplierName,
-      nameAr: supplierName, // TODO: populate a real Arabic name if different
+      nameAr: sellerDefaults.nameAr || supplierName,
       vatNumber: supplierVAT,
       registrationName: supplierName,
       address: supplierAddress,

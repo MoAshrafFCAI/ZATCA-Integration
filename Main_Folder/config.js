@@ -28,51 +28,53 @@ export const zatcaConfig = {
 };
 
 // -----------------------------------------------------------------------------
-// TODO: SELLER / VAT INFO
-// Replace with your real registered values. Do NOT let this silently fall
-// back to a placeholder in production — a missing VAT number should be a
-// hard error, not a substituted test value, since submitting a live invoice
-// under the wrong VAT number is a compliance problem, not just a bug.
+// SELLER / VAT INFO
 // -----------------------------------------------------------------------------
 export const sellerDefaults = {
-  vatNumber: process.env.SELLER_VAT_NUMBER || null, // TODO: set real VAT number
-  name: process.env.SELLER_NAME || null, // TODO: set real registered name
+  vatNumber: process.env.SELLER_VAT_NUMBER || '300437621100003',
+  crNumber: process.env.SELLER_CR_NUMBER || '2051034841', // Commercial Registration number — not part of the invoice XML itself, but needed for onboarding/CSR generation later
+  name: process.env.SELLER_NAME || 'Sumou Real Estate Company',
+  nameAr: process.env.SELLER_NAME_AR || 'شركة سمو العقارية',
 };
 
 // -----------------------------------------------------------------------------
-// TODO: ADDRESSES
+// ADDRESSES
 // ZATCA requires structured fields: street, buildingNumber (4 digits),
 // additionalNumber (4 digits), district, city, postalCode (5 digits),
 // countryCode (ISO 3166-1 alpha-2, e.g. "SA").
-// Parsing these out of a free-text address string (as the original code did)
-// is unreliable. Until Oracle Fusion reliably returns structured fields,
-// keep this as an explicit override — or better, look addresses up from your
-// own customer/supplier master data keyed by the Oracle party ID.
+//
+// NOTE on `unitNumber`: ZATCA's standard UBL address block doesn't have a
+// dedicated "unit number" field (it has StreetName, BuildingNumber,
+// AdditionalStreetName, CitySubdivisionName/district, CityName, PostalZone,
+// Country). Unit 22 is kept here so it isn't lost, but TODO: confirm with
+// the actual UBL mapping (in invoice-mapper.js / @talha7k/zatca) whether it
+// should fold into `additionalStreetName` or just be dropped from the XML —
+// it may only matter for your own records, not for ZATCA's schema.
+//
+// `street` is still unset — the address given didn't include a street name,
+// only building/unit/district/city/zip. Fill this in before assertRequiredConfig
+// will pass.
 // -----------------------------------------------------------------------------
 export const supplierAddressDefault = {
-  street: null, // TODO
-  building: null, // TODO
-  additionalNumber: null, // TODO
-  district: null, // TODO
-  city: null, // TODO
-  postalCode: null, // TODO
+  street: null, // TODO: not provided yet — building/district/city alone aren't enough for the required StreetName field
+  building: '6140',
+  additionalNumber: '4316',
+  unitNumber: '22', // see note above — likely not a standard ZATCA field, kept for reference
+  district: 'الريموك',
+  city: 'Al Khubar',
+  postalCode: '34423',
   countryCode: 'SA',
 };
 
 // -----------------------------------------------------------------------------
-// TODO: CERTIFICATES / KEYS
-// Once your CSR and compliance/production CSID are issued by ZATCA, point
-// these at the real files. Keep them out of source control (.gitignore).
+// SIGNING SERVICE
+// Canonicalization, hashing, ECDSA signing, and QR generation all happen in
+// the Java zatca-signing-service now (see signing-client.js for why) — the
+// cert/private key/cert-password env vars live over there
+// (zatca-signing-service/.env.example), not here. This is just the URL Node
+// calls to reach it.
 // -----------------------------------------------------------------------------
-export const certPaths = {
-  certPath: process.env.ZATCA_CERT_PATH || './certs/cert.pem', // TODO: replace with real cert
-  privateKeyPath: process.env.ZATCA_PRIVATE_KEY_PATH || './certs/private-key.pem', // TODO: replace with real key
-  // TODO: the certificate signature (QR tag 9) is not just a chunk of the PEM —
-  // it's extracted from a specific extension in the certificate ZATCA issues you.
-  // Confirm the correct extraction method once your CSID cert exists; the helper
-  // in cert-helpers.js has a placeholder you'll need to fill in.
-  certSignatureBase64: process.env.ZATCA_CERT_SIGNATURE_B64 || null, // TODO
-};
+export const signingServiceUrl = process.env.ZATCA_SIGNING_SERVICE_URL || 'http://localhost:8080';
 
 // Extend this if you sell anything other than standard-rated goods/services.
 // ZATCA category codes: S = Standard, Z = Zero rated, E = Exempt, O = Out of scope.
@@ -83,7 +85,6 @@ export function assertRequiredConfig() {
   if (!sellerDefaults.vatNumber) missing.push('SELLER_VAT_NUMBER');
   if (!sellerDefaults.name) missing.push('SELLER_NAME');
   if (!supplierAddressDefault.street) missing.push('supplierAddressDefault (address fields)');
-  if (!certPaths.certSignatureBase64) missing.push('ZATCA_CERT_SIGNATURE_B64');
   if (missing.length) {
     throw new Error(
       `Missing required config before this can run against a real environment: ${missing.join(', ')}. ` +

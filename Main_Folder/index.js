@@ -1,100 +1,102 @@
 // index.js
 // -----------------------------------------------------------------------------
-// Full pipeline, actually wired together end to end:
-//   Oracle Fusion -> map to ZATCA shape -> generate UBL XML -> canonicalize
-//   -> hash -> sign -> build QR -> embed -> submit -> record chain state
+// Full pipeline, wired end to end:
+//   Oracle BI Publisher report -> parse report XML -> map to ZATCA shape ->
+//   generate UBL XML -> sign (via the Java zatca-signing-service, which
+//   handles canonicalization, hashing, ECDSA signing, and QR embedding using
+//   ZATCA's own SDK) -> submit -> record chain state
 //
-// IMPORTANT: generateInvoiceXml is imported from "@talha7k/zatca", which I
-// was NOT able to verify actually exists / exports this function (see the
-// note in invoice-mapper.js). Run `npm view @talha7k/zatca` before trusting
-// this. If it doesn't resolve, you'll need to swap in whatever UBL-generation
-// approach you settle on — everything downstream of `ublXml` doesn't care how
-// that XML was produced, just that it matches the invoiceData shape's fields.
+// NOTE: this used to fetch from Oracle's receivablesInvoices REST resource
+// via invoice-mapper.js. That file is still in the project for reference,
+// but is no longer imported here — replaced by report-mapper.js, which
+// consumes a BI Publisher report XML instead (see report-mapper.js header
+// comment for why, and for the TODOs still open on the BIP REST endpoint
+// path/params).
+//
+// generateInvoiceXml is imported from "@talha7k/zatca" — confirmed real and
+// installed; its actual InvoiceData type (checked against
+// node_modules/@talha7k/zatca/dist/types.d.ts) is what report-mapper.js's
+// output shape is built against.
+//
+// PREREQUISITE: the Java signing service must be running and reachable at
+// ZATCA_SIGNING_SERVICE_URL (default http://localhost:8080) — see
+// zatca-signing-service/README.md for setup.
 // -----------------------------------------------------------------------------
 
 import { generateInvoiceXml } from '@talha7k/zatca';
 import fs from 'fs';
-import { getInvoice, mapApiToZatcaFormat } from './invoice-mapper.js';
-import {
-  canonicalizeXml,
-  generateInvoiceHash,
-  buildSignedInfo,
-  signSignedInfo,
-  buildSignatureBlock,
-  buildQRData,
-  extractPublicKeyBase64,
-  embedSignatureAndQR,
-  submitToZatca,
-} from './zatca-pipeline.js';
-import { certPaths, assertRequiredConfig } from './config.js';
+import { fetchInvoiceReportXml, mapReportXmlToZatcaFormat } from './report-mapper.js';
+import { signInvoiceXml, checkSigningServiceHealth } from './signing-client.js';
+import { submitToZatca } from './zatca-pipeline.js';
+import { assertRequiredConfig } from './config.js';
 import { recordInvoice } from './chain-store.js';
 
-async function generateAndSubmitInvoice(customerTransactionId, { submit = false, submissionType = 'CLEARANCE' } = {}) {
-  // Fails loudly and early if VAT number / seller name / address / cert
-  // signature TODOs in config.js haven't been filled in yet.
+async function generateAndSubmitInvoice(invoiceNumber, { submit = false, submissionType = null } = {}) {
+  // Fails loudly and early if VAT number / seller name / address TODOs in
+  // config.js haven't been filled in yet.
   assertRequiredConfig();
 
-  console.log(`Fetching invoice ${customerTransactionId} from Oracle Fusion...`);
-  const apiData = await getInvoice(customerTransactionId);
+  if (!(await checkSigningServiceHealth())) {
+    throw new Error(
+      'ZATCA signing service is not reachable — start it first (see zatca-signing-service/README.md). ' +
+      'Nothing was fetched from Oracle yet, so this failed fast on purpose.'
+    );
+  }
 
-  console.log('Mapping to ZATCA format...');
-  const invoiceData = mapApiToZatcaFormat(apiData);
+  console.log(`Fetching report XML for invoice ${invoiceNumber} from Oracle BI Publisher...`);
+  const rawReportXml = await fetchInvoiceReportXml(invoiceNumber);
+
+  console.log('Mapping report XML to ZATCA format...');
+  const invoices = mapReportXmlToZatcaFormat(rawReportXml);
+  if (invoices.length !== 1) {
+    throw new Error(
+      `Expected exactly one invoice for ${invoiceNumber}, got ${invoices.length} — ` +
+      `if you're intentionally pulling a multi-invoice report, loop over mapReportXmlToZatcaFormat's ` +
+      `result yourself instead of calling generateAndSubmitInvoice per-ID.`
+    );
+  }
+  const invoiceData = invoices[0];
 
   console.log('Generating UBL XML...');
   const ublXml = generateInvoiceXml(invoiceData);
 
-  console.log('Canonicalizing...');
-  const canonicalXml = await canonicalizeXml(ublXml);
+  console.log('Signing via zatca-signing-service (canonicalize + hash + sign + QR)...');
+  const { invoiceHash, signedInvoiceXml: finalXml } = await signInvoiceXml(ublXml);
 
-  console.log('Hashing...');
-  const invoiceHash = generateInvoiceHash(canonicalXml);
-
-  console.log('Signing...');
-  // TODO: replace these placeholder files once your CSID cert/key are issued.
-  const certPem = fs.readFileSync(certPaths.certPath, 'utf8');
-  const privateKeyPem = fs.readFileSync(certPaths.privateKeyPath, 'utf8');
-
-  const signedInfoXml = buildSignedInfo(invoiceHash);
-  const signatureBase64 = await signSignedInfo(signedInfoXml, privateKeyPem);
-  const signatureBlock = buildSignatureBlock(signedInfoXml, signatureBase64, certPem);
-
-  console.log('Building QR...');
-  const publicKeyBase64 = extractPublicKeyBase64(certPem);
-  const qrBase64 = buildQRData({
-    sellerName: invoiceData.supplier.name,
-    vatNumber: invoiceData.supplier.vatNumber,
-    timestamp: `${invoiceData.issueDate}T${invoiceData.issueTime}`,
-    total: invoiceData.taxInclusiveAmount,
-    vatTotal: invoiceData.taxAmount,
-    hashBase64: invoiceHash,
-    signatureBase64,
-    publicKeyBase64,
-    certSignatureBase64: certPaths.certSignatureBase64, // TODO: see config.js
-  });
-
-  console.log('Embedding signature and QR...');
-  const finalXml = embedSignatureAndQR(ublXml, signatureBlock, qrBase64);
-
-  const outFile = `invoice_${customerTransactionId}_final.xml`;
+  const outFile = `invoice_${invoiceNumber}_final.xml`;
   fs.writeFileSync(outFile, finalXml);
   console.log(`Saved ${outFile}`);
 
+  // B2B (STANDARD) invoices go through /clearance (synchronous — ZATCA signs
+  // and hands back a cleared invoice). B2C (SIMPLIFIED) invoices go through
+  // /reporting (async, must be reported within 24h of issuance). Callers can
+  // still force a specific value via the `submissionType` option, but the
+  // default now follows what mapApiToZatcaFormat decided rather than always
+  // assuming clearance.
+  const resolvedSubmissionType =
+    submissionType || (invoiceData.invoiceCategory === 'STANDARD' ? 'CLEARANCE' : 'REPORTING');
+
   let submissionResult = null;
   if (submit) {
-    console.log(`Submitting to ZATCA (${submissionType})...`);
+    console.log(`Submitting to ZATCA (${resolvedSubmissionType}, category=${invoiceData.invoiceCategory})...`);
     const base64Invoice = Buffer.from(finalXml, 'utf8').toString('base64');
     submissionResult = await submitToZatca({
       base64Invoice,
       invoiceHash,
       uuid: invoiceData.uuid,
-      submissionType,
+      submissionType: resolvedSubmissionType,
     });
     console.log('Submission result:', submissionResult);
 
     // Only advance the chain after a confirmed successful submission —
     // recording an invoice that never cleared/reported would corrupt every
-    // invoice after it.
-    recordInvoice(invoiceHash, invoiceData.invoiceCounterValue);
+    // invoice after it. Also stores uuid/issueDate so a future credit/debit
+    // note referencing this invoice can look them up (see chain-store.js).
+    recordInvoice(invoiceData.invoiceNumber, invoiceHash, invoiceData.invoiceCounter, {
+      uuid: invoiceData.uuid,
+      issueDate: invoiceData.issueDate,
+      invoiceTypeCode: invoiceData.invoiceTypeCode,
+    });
   } else {
     console.log('submit=false — skipping actual ZATCA submission (dry run). Chain state was NOT advanced.');
   }
@@ -105,9 +107,9 @@ async function generateAndSubmitInvoice(customerTransactionId, { submit = false,
 // ---------------------------------------------------------------------------
 // USAGE
 // ---------------------------------------------------------------------------
-const customerTransactionId = process.argv[2] || '300000005086439';
+const invoiceNumber = process.argv[2] || '1000';
 
-generateAndSubmitInvoice(customerTransactionId, { submit: false })
+generateAndSubmitInvoice(invoiceNumber, { submit: false })
   .then(() => console.log('Done.'))
   .catch((error) => {
     console.error('Failed:', error.message);
