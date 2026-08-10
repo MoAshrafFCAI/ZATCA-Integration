@@ -12,53 +12,64 @@
 // that XML was produced, just that it matches the invoiceData shape's fields.
 // -----------------------------------------------------------------------------
 
-import { generateInvoiceXml } from '@talha7k/zatca';
-import fs from 'fs';
-import { getInvoice, mapApiToZatcaFormat } from './invoice-mapper.js';
-import {
-  canonicalizeXml,
-  generateInvoiceHash,
-  buildSignedInfo,
-  signSignedInfo,
-  buildSignatureBlock,
-  buildQRData,
-  extractPublicKeyBase64,
-  embedSignatureAndQR,
-  submitToZatca,
-} from './zatca-pipeline.js';
-import { certPaths, assertRequiredConfig } from './config.js';
-import { recordInvoice } from './chain-store.js';
+import fs from "fs";
+import { runConversion } from "./invoice-converstion.js";
 
-async function generateAndSubmitInvoice(customerTransactionId, { submit = false, submissionType = 'CLEARANCE' } = {}) {
+async function generateAndSubmitInvoice(
+  customerTransactionId,
+  { submit = false, submissionType = "CLEARANCE" } = {},
+) {
+  const { getInvoice, mapApiToZatcaFormat } =
+    await import("./invoice-mapper.js");
+  const {
+    canonicalizeXml,
+    generateInvoiceHash,
+    buildSignedInfo,
+    signSignedInfo,
+    buildSignatureBlock,
+    buildQRData,
+    extractPublicKeyBase64,
+    embedSignatureAndQR,
+    submitToZatca,
+  } = await import("./zatca-pipeline.js");
+  const { certPaths, assertRequiredConfig } = await import("./config.js");
+  const { recordInvoice } = await import("./chain-store.js");
+
   // Fails loudly and early if VAT number / seller name / address / cert
   // signature TODOs in config.js haven't been filled in yet.
   assertRequiredConfig();
 
-  console.log(`Fetching invoice ${customerTransactionId} from Oracle Fusion...`);
+  console.log(
+    `Fetching invoice ${customerTransactionId} from Oracle Fusion...`,
+  );
   const apiData = await getInvoice(customerTransactionId);
 
-  console.log('Mapping to ZATCA format...');
+  console.log("Mapping to ZATCA format...");
   const invoiceData = mapApiToZatcaFormat(apiData);
 
-  console.log('Generating UBL XML...');
+  console.log("Generating UBL XML...");
   const ublXml = generateInvoiceXml(invoiceData);
 
-  console.log('Canonicalizing...');
+  console.log("Canonicalizing...");
   const canonicalXml = await canonicalizeXml(ublXml);
 
-  console.log('Hashing...');
+  console.log("Hashing...");
   const invoiceHash = generateInvoiceHash(canonicalXml);
 
-  console.log('Signing...');
+  console.log("Signing...");
   // TODO: replace these placeholder files once your CSID cert/key are issued.
-  const certPem = fs.readFileSync(certPaths.certPath, 'utf8');
-  const privateKeyPem = fs.readFileSync(certPaths.privateKeyPath, 'utf8');
+  const certPem = fs.readFileSync(certPaths.certPath, "utf8");
+  const privateKeyPem = fs.readFileSync(certPaths.privateKeyPath, "utf8");
 
   const signedInfoXml = buildSignedInfo(invoiceHash);
   const signatureBase64 = await signSignedInfo(signedInfoXml, privateKeyPem);
-  const signatureBlock = buildSignatureBlock(signedInfoXml, signatureBase64, certPem);
+  const signatureBlock = buildSignatureBlock(
+    signedInfoXml,
+    signatureBase64,
+    certPem,
+  );
 
-  console.log('Building QR...');
+  console.log("Building QR...");
   const publicKeyBase64 = extractPublicKeyBase64(certPem);
   const qrBase64 = buildQRData({
     sellerName: invoiceData.supplier.name,
@@ -72,7 +83,7 @@ async function generateAndSubmitInvoice(customerTransactionId, { submit = false,
     certSignatureBase64: certPaths.certSignatureBase64, // TODO: see config.js
   });
 
-  console.log('Embedding signature and QR...');
+  console.log("Embedding signature and QR...");
   const finalXml = embedSignatureAndQR(ublXml, signatureBlock, qrBase64);
 
   const outFile = `invoice_${customerTransactionId}_final.xml`;
@@ -82,21 +93,23 @@ async function generateAndSubmitInvoice(customerTransactionId, { submit = false,
   let submissionResult = null;
   if (submit) {
     console.log(`Submitting to ZATCA (${submissionType})...`);
-    const base64Invoice = Buffer.from(finalXml, 'utf8').toString('base64');
+    const base64Invoice = Buffer.from(finalXml, "utf8").toString("base64");
     submissionResult = await submitToZatca({
       base64Invoice,
       invoiceHash,
       uuid: invoiceData.uuid,
       submissionType,
     });
-    console.log('Submission result:', submissionResult);
+    console.log("Submission result:", submissionResult);
 
     // Only advance the chain after a confirmed successful submission —
     // recording an invoice that never cleared/reported would corrupt every
     // invoice after it.
     recordInvoice(invoiceHash, invoiceData.invoiceCounterValue);
   } else {
-    console.log('submit=false — skipping actual ZATCA submission (dry run). Chain state was NOT advanced.');
+    console.log(
+      "submit=false — skipping actual ZATCA submission (dry run). Chain state was NOT advanced.",
+    );
   }
 
   return { invoiceData, invoiceHash, finalXml, submissionResult };
@@ -105,13 +118,42 @@ async function generateAndSubmitInvoice(customerTransactionId, { submit = false,
 // ---------------------------------------------------------------------------
 // USAGE
 // ---------------------------------------------------------------------------
-const customerTransactionId = process.argv[2] || '300000005086439';
+const DEFAULT_XML_PATH = "F:/INFORABIA/Zatca results/new/zatca_report.xml";
 
-generateAndSubmitInvoice(customerTransactionId, { submit: false })
-  .then(() => console.log('Done.'))
-  .catch((error) => {
-    console.error('Failed:', error.message);
+function isXmlInput(value) {
+  if (!value) return false;
+  return value.toLowerCase().endsWith(".xml") || value.startsWith("file://");
+}
+
+const inputArg = process.argv[2] || DEFAULT_XML_PATH;
+
+if (isXmlInput(inputArg)) {
+  const outputDir = process.argv[3] || ".";
+  const previousInvoiceHash =
+    process.argv[4] ||
+    "NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ==";
+
+  try {
+    const files = runConversion({
+      inputPathOverride: inputArg,
+      outputDirOverride: outputDir,
+      previousHashOverride: previousInvoiceHash,
+    });
+    console.log("XML conversion finished successfully.");
+    console.log(files.join("\n"));
+  } catch (error) {
+    console.error("XML conversion failed:", error.message);
     process.exitCode = 1;
-  });
+  }
+} else {
+  const customerTransactionId = inputArg;
+
+  generateAndSubmitInvoice(customerTransactionId, { submit: false })
+    .then(() => console.log("Done."))
+    .catch((error) => {
+      console.error("Failed:", error.message);
+      process.exitCode = 1;
+    });
+}
 
 export { generateAndSubmitInvoice };

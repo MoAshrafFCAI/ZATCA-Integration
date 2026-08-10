@@ -23,7 +23,7 @@ function resolveInputPath(rawArg) {
   if (rawArg.startsWith("file://")) return fileURLToPath(rawArg);
   return rawArg;
 }
-  
+
 const DEFAULT_INPUT_PATH = "F:/INFORABIA/Zatca results/new/zatca_report.xml";
 const inputPath = resolveInputPath(process.argv[2] || DEFAULT_INPUT_PATH);
 const outputDir = process.argv[3] || ".";
@@ -388,6 +388,53 @@ ${inv.lines.map((l) => renderInvoiceLine(l, c)).join("\n")}
 // MAIN
 // ============================================================
 
+export function runConversion({
+  inputPathOverride = DEFAULT_INPUT_PATH,
+  outputDirOverride = ".",
+  previousHashOverride = previousInvoiceHash,
+} = {}) {
+  const targetInputPath = resolveInputPath(inputPathOverride);
+  if (!targetInputPath) {
+    throw new Error(
+      "Set DEFAULT_INPUT_PATH at the top of invoice-converstion.js or pass an input XML path as the first argument.",
+    );
+  }
+  if (!fs.existsSync(targetInputPath)) {
+    throw new Error(`File not found: ${targetInputPath}`);
+  }
+
+  const rows = readRows(targetInputPath);
+
+  const invoiceGroups = new Map();
+  for (const row of rows) {
+    const invoiceNumber = text(row, "INVOICE_NUMBER");
+    if (!invoiceGroups.has(invoiceNumber)) invoiceGroups.set(invoiceNumber, []);
+    invoiceGroups.get(invoiceNumber).push(row);
+  }
+
+  fs.mkdirSync(outputDirOverride, { recursive: true });
+
+  const generatedFiles = [];
+  let icv = 1;
+  for (const [invoiceNumber, invoiceRows] of invoiceGroups) {
+    console.log(
+      `Building invoice ${invoiceNumber} (${invoiceRows.length} line(s))...`,
+    );
+    const model = buildInvoiceModel(invoiceNumber, invoiceRows, icv++);
+    const xml = renderInvoiceXml(model, previousHashOverride);
+
+    const outFile = path.join(
+      outputDirOverride,
+      `invoice_${invoiceNumber}.xml`,
+    );
+    fs.writeFileSync(outFile, xml, "utf-8");
+    generatedFiles.push(outFile);
+    console.log(`Saved: ${outFile}`);
+  }
+
+  return generatedFiles;
+}
+
 function main() {
   const rows = readRows(inputPath);
 
@@ -414,4 +461,9 @@ function main() {
   }
 }
 
-main();
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  main();
+}
