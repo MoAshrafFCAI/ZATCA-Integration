@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+    <!-- <ext:UBLExtensions> intentionally omitted here: per the UBL/ZATCA
+         schema it must either be absent, or contain a real, signed
+         UBLExtension - an empty/placeholder one fails XSD validation
+         (cvc-complex-type.2.4.b). The digital signature + QR are injected
+         into this element during the signing step, which requires your
+         onboarded ZATCA CSID certificate and is not produced by this script. -->
+
+    <cbc:ProfileID>reporting:1.0</cbc:ProfileID>
+    <cbc:ID>1000</cbc:ID>
+    <cbc:UUID>b87e509b-ad61-41d1-b2ce-f391b85705cd</cbc:UUID>
+    <cbc:IssueDate>2026-07-01</cbc:IssueDate>
+    <cbc:IssueTime>08:29:36</cbc:IssueTime>
+    <cbc:InvoiceTypeCode name="010000000">388</cbc:InvoiceTypeCode>
+    <cbc:DocumentCurrencyCode>SAR</cbc:DocumentCurrencyCode>
+    <cbc:TaxCurrencyCode>SAR</cbc:TaxCurrencyCode>
+    <cac:AdditionalDocumentReference>
+        <cbc:ID>ICV</cbc:ID>
+        <cbc:UUID>1</cbc:UUID>
+    </cac:AdditionalDocumentReference>
+    <cac:AdditionalDocumentReference>
+        <cbc:ID>PIH</cbc:ID>
+        <cac:Attachment>
+            <cbc:EmbeddedDocumentBinaryObject mimeCode="text/plain">NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ==</cbc:EmbeddedDocumentBinaryObject>
+        </cac:Attachment>
+    </cac:AdditionalDocumentReference>
+    <cac:Signature>
+      <cbc:ID>urn:oasis:names:specification:ubl:signature:Invoice</cbc:ID>
+      <cbc:SignatureMethod>urn:oasis:names:specification:ubl:dsig:enveloped:xades</cbc:SignatureMethod>
+</cac:Signature><cac:AccountingSupplierParty>
+        <cac:Party>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="CRN">123456789</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PostalAddress>
+                <cbc:StreetName>Prince Sultan</cbc:StreetName>
+                <cbc:BuildingNumber>1250</cbc:BuildingNumber>
+                <cbc:CitySubdivisionName>Al-Murabba</cbc:CitySubdivisionName>
+                <cbc:CityName>Riyadh</cbc:CityName>
+                <cbc:PostalZone>12211</cbc:PostalZone>
+                <cac:Country>
+                    <cbc:IdentificationCode>SA</cbc:IdentificationCode>
+                </cac:Country>
+            </cac:PostalAddress>
+            <cac:PartyTaxScheme>
+                <cbc:CompanyID>300123456789123</cbc:CompanyID>
+                <cac:TaxScheme>
+                    <cbc:ID>VAT</cbc:ID>
+                </cac:TaxScheme>
+            </cac:PartyTaxScheme>
+            <cac:PartyLegalEntity>
+                <cbc:RegistrationName>سمو العقارية</cbc:RegistrationName>
+            </cac:PartyLegalEntity>
+        </cac:Party>
+    </cac:AccountingSupplierParty>
+     <cac:AccountingCustomerParty>
+        <cac:Party>
+            <cac:PostalAddress>
+                <cbc:StreetName>District customer</cbc:StreetName>
+                <cbc:BuildingNumber>building  customer</cbc:BuildingNumber>
+                <cbc:CitySubdivisionName>street customer</cbc:CitySubdivisionName>
+                <cbc:CityName>Jada</cbc:CityName>
+                <cbc:PostalZone>21421</cbc:PostalZone>
+                <cac:Country>
+                    <cbc:IdentificationCode>SA</cbc:IdentificationCode>
+                </cac:Country>
+            </cac:PostalAddress>
+            <cac:PartyTaxScheme>
+                <cbc:CompanyID>314280240800003</cbc:CompanyID>
+                <cac:TaxScheme>
+                    <cbc:ID>VAT</cbc:ID>
+                </cac:TaxScheme>
+            </cac:PartyTaxScheme>
+            <cac:PartyLegalEntity>
+                <cbc:RegistrationName>Customer 1</cbc:RegistrationName>
+            </cac:PartyLegalEntity>
+        </cac:Party>
+    </cac:AccountingCustomerParty>
+    <cac:Delivery>
+        <cbc:ActualDeliveryDate>2026-07-01</cbc:ActualDeliveryDate>
+    </cac:Delivery>
+    <cac:PaymentMeans>
+        <cbc:PaymentMeansCode>10</cbc:PaymentMeansCode>
+    </cac:PaymentMeans>
+    <cac:AllowanceCharge>
+        <cbc:ChargeIndicator>false</cbc:ChargeIndicator>
+        <cbc:AllowanceChargeReason>discount</cbc:AllowanceChargeReason>
+        <cbc:Amount currencyID="SAR">0.00</cbc:Amount>
+        <cac:TaxCategory>
+            <cbc:ID schemeID="UN/ECE 5305" schemeAgencyID="6">Z</cbc:ID>
+            <cbc:Percent>0</cbc:Percent>
+            <cac:TaxScheme>
+                <cbc:ID schemeID="UN/ECE 5153" schemeAgencyID="6">VAT</cbc:ID>
+            </cac:TaxScheme>
+        </cac:TaxCategory>
+    </cac:AllowanceCharge>
+    <cac:TaxTotal>
+        <cbc:TaxAmount currencyID="SAR">0.00</cbc:TaxAmount>
+    </cac:TaxTotal>
+    <cac:TaxTotal>
+        <cbc:TaxAmount currencyID="SAR">0.00</cbc:TaxAmount>
+        <cac:TaxSubtotal>
+            <cbc:TaxableAmount currencyID="SAR">10000.00</cbc:TaxableAmount>
+            <cbc:TaxAmount currencyID="SAR">0.00</cbc:TaxAmount>
+             <cac:TaxCategory>
+                 <cbc:ID schemeID="UN/ECE 5305" schemeAgencyID="6">Z</cbc:ID>
+                 <cbc:Percent>0.00</cbc:Percent>
+                <cac:TaxScheme>
+                   <cbc:ID schemeID="UN/ECE 5153" schemeAgencyID="6">VAT</cbc:ID>
+                </cac:TaxScheme>
+             </cac:TaxCategory>
+        </cac:TaxSubtotal>
+    </cac:TaxTotal>
+    <cac:LegalMonetaryTotal>
+        <cbc:LineExtensionAmount currencyID="SAR">10000.00</cbc:LineExtensionAmount>
+        <cbc:TaxExclusiveAmount currencyID="SAR">10000.00</cbc:TaxExclusiveAmount>
+        <cbc:TaxInclusiveAmount currencyID="SAR">10000.00</cbc:TaxInclusiveAmount>
+        <cbc:AllowanceTotalAmount currencyID="SAR">0.00</cbc:AllowanceTotalAmount>
+        <cbc:PrepaidAmount currencyID="SAR">0.00</cbc:PrepaidAmount>
+        <cbc:PayableAmount currencyID="SAR">10000.00</cbc:PayableAmount>
+    </cac:LegalMonetaryTotal>
+    <cac:InvoiceLine>
+        <cbc:ID>1</cbc:ID>
+        <cbc:InvoicedQuantity unitCode="PCE">500.000000</cbc:InvoicedQuantity>
+        <cbc:LineExtensionAmount currencyID="SAR">10000.00</cbc:LineExtensionAmount>
+        <cac:TaxTotal>
+             <cbc:TaxAmount currencyID="SAR">0.00</cbc:TaxAmount>
+             <cbc:RoundingAmount currencyID="SAR">10000.00</cbc:RoundingAmount>
+        </cac:TaxTotal>
+        <cac:Item>
+            <cbc:Name>abc</cbc:Name>
+            <cac:ClassifiedTaxCategory>
+                <cbc:ID>Z</cbc:ID>
+                <cbc:Percent>0.00</cbc:Percent>
+                <cac:TaxScheme>
+                    <cbc:ID>VAT</cbc:ID>
+                </cac:TaxScheme>
+            </cac:ClassifiedTaxCategory>
+        </cac:Item>
+        <cac:Price>
+            <cbc:PriceAmount currencyID="SAR">20.00</cbc:PriceAmount>
+        </cac:Price>
+    </cac:InvoiceLine>
+</Invoice>
