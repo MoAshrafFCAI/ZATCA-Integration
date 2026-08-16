@@ -56,7 +56,7 @@ export const sellerDefaults = {
 // will pass.
 // -----------------------------------------------------------------------------
 export const supplierAddressDefault = {
-  street: null, // TODO: not provided yet — building/district/city alone aren't enough for the required StreetName field
+  street: 'طريق الملك سلمان بن عبدالعزيز', // TODO: not provided yet — building/district/city alone aren't enough for the required StreetName field
   building: '6140',
   additionalNumber: '4316',
   unitNumber: '22', // see note above — likely not a standard ZATCA field, kept for reference
@@ -76,6 +76,23 @@ export const supplierAddressDefault = {
 // -----------------------------------------------------------------------------
 export const signingServiceUrl = process.env.ZATCA_SIGNING_SERVICE_URL || 'http://localhost:8080';
 
+// -----------------------------------------------------------------------------
+// BI PUBLISHER (SOAP)
+// Invoice data is pulled by running a BIP report via
+// ExternalReportWSSService/runReport — see bip-soap-client.js.
+// -----------------------------------------------------------------------------
+export const bipConfig = {
+  // Full BIP catalog path to the report, ending in .xdo. Find it in the BIP
+  // catalog (Reports and Analytics -> browse to the report -> its path).
+  // e.g. '/Custom/Financials/ZATCA/zatca_report.xdo'
+  reportPath: process.env.BIP_REPORT_PATH || null, // TODO: set this
+
+  // The report's own parameter name for filtering to one invoice. Must match
+  // the report definition exactly (case-sensitive) — BIP silently ignores
+  // unknown parameter names and returns all rows rather than erroring.
+  invoiceParamName: process.env.BIP_INVOICE_PARAM_NAME || 'P_INVOICE_NUMBER', // TODO: confirm
+};
+
 // Extend this if you sell anything other than standard-rated goods/services.
 // ZATCA category codes: S = Standard, Z = Zero rated, E = Exempt, O = Out of scope.
 export const DEFAULT_TAX_CATEGORY = 'S';
@@ -85,6 +102,7 @@ export function assertRequiredConfig() {
   if (!sellerDefaults.vatNumber) missing.push('SELLER_VAT_NUMBER');
   if (!sellerDefaults.name) missing.push('SELLER_NAME');
   if (!supplierAddressDefault.street) missing.push('supplierAddressDefault (address fields)');
+  if (!bipConfig.reportPath) missing.push('BIP_REPORT_PATH');
   if (missing.length) {
     throw new Error(
       `Missing required config before this can run against a real environment: ${missing.join(', ')}. ` +

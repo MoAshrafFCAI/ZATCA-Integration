@@ -23,9 +23,10 @@
 // zatca-signing-service/README.md for setup.
 // -----------------------------------------------------------------------------
 
-import { generateInvoiceXml } from '@talha7k/zatca';
+import { generateInvoiceXml, generateCreditNoteXml } from '@talha7k/zatca';
 import fs from 'fs';
-import { fetchInvoiceReportXml, mapReportXmlToZatcaFormat } from './report-mapper.js';
+import { mapReportXmlToZatcaFormat } from './report-mapper.js';
+import { fetchInvoiceReportXml } from './bip-soap-client.js';
 import { signInvoiceXml, checkSigningServiceHealth } from './signing-client.js';
 import { submitToZatca } from './zatca-pipeline.js';
 import { assertRequiredConfig } from './config.js';
@@ -43,7 +44,7 @@ async function generateAndSubmitInvoice(invoiceNumber, { submit = false, submiss
     );
   }
 
-  console.log(`Fetching report XML for invoice ${invoiceNumber} from Oracle BI Publisher...`);
+  console.log(`Running BI Publisher report for invoice ${invoiceNumber} (SOAP)...`);
   const rawReportXml = await fetchInvoiceReportXml(invoiceNumber);
 
   console.log('Mapping report XML to ZATCA format...');
@@ -57,8 +58,18 @@ async function generateAndSubmitInvoice(invoiceNumber, { submit = false, submiss
   }
   const invoiceData = invoices[0];
 
-  console.log('Generating UBL XML...');
-  const ublXml = generateInvoiceXml(invoiceData);
+  // Dispatch on document type. @talha7k/zatca has two separate generators:
+  // generateCreditNoteXml adds the cac:BillingReference and
+  // cbc:InstructionNote blocks that ZATCA requires on 381/383. Passing a
+  // credit/debit note through generateInvoiceXml produces XML that looks
+  // valid but is missing those blocks, so ZATCA rejects it — and the failure
+  // happens at submission, not generation, which makes it hard to trace.
+  const isAdjustmentNote = invoiceData.documentType !== 'INVOICE';
+  console.log(
+    `Generating UBL XML (${invoiceData.documentType}, ${invoiceData.invoiceCategory}, ` +
+    `type=${invoiceData.invoiceTypeCode}/${invoiceData.invoiceTypeCodeName})...`
+  );
+  const ublXml = isAdjustmentNote ? generateCreditNoteXml(invoiceData) : generateInvoiceXml(invoiceData);
 
   console.log('Signing via zatca-signing-service (canonicalize + hash + sign + QR)...');
   const { invoiceHash, signedInvoiceXml: finalXml } = await signInvoiceXml(ublXml);

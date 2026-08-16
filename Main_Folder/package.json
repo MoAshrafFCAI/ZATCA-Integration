@@ -10,10 +10,5 @@
     "@talha7k/zatca": "^0.11.1",
     "dotenv": "^16.4.5",
     "fast-xml-parser": "^5.10.1"
-  },
-  "notes": "Confirm whether @talha7k/zatca actually resolves before adding it here — see the note at the top of index.js and invoice-mapper.js. All XML canonicalization/signing/QR generation now happens in zatca-signing-service (Java) via signing-client.js, not in this Node package — xml-c14n, xmldom, and asn1.js were removed because they were never actually usable for this (see zatca-pipeline.js header comment).",
-  "description": "Two pieces, run as separate processes:",
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  }
 }
