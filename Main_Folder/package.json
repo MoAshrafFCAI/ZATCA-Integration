@@ -7,10 +7,8 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "@talha7k/zatca": "^0.11.1",
     "dotenv": "^16.4.5",
-    "xml-c14n": "^0.5.0",
-    "xmldom": "^0.6.0",
-    "asn1.js": "^5.4.1"
-  },
-  "notes": "Confirm whether @talha7k/zatca actually resolves before adding it here — see the note at the top of index.js and invoice-mapper.js."
+    "fast-xml-parser": "^5.10.1"
+  }
 }
